@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title> MCP Graph </title>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c">Your browser does not support canvas.</canvas>
+    <script>
+      // Create Entity class to store prices and qtys
+      class Entity {
+        constructor(price, qty) {
+          this.price = price;
+          this.qty = qty;
+        } 
+        addQty(addQty) { this.qty += addQty; }
+      }
+      // Create Point class
+      class Point {
+        constructor(x, y) {
+          this.x = x;
+          this.y = y;
+        }
+        getGlobalPt() { 
+          return new Point(0 + this.x, ctx.canvas.height - this.y); 
+        }
+        getCartesianPt() { 
+          return new Point(
+            zeroCoord.x + (this.x * xAxisLength / lastXDataPoint),
+            zeroCoord.y + (this.y * yAxisLength / lastYDataPoint)
+          ); 
+        }
+      }
+
+      // create the list of buyers and sellers
+      buyers = [
+        new Entity(100, 100),
+        new Entity(200, 200),
+      ];
+      sellers = [
+        new Entity(100, 100),
+        new Entity(200, 200),
+      ];
+
+
+      cumuBuyers = [];
+      cumuSellers = [];
+      xDataPoints = [];
+      yDataPoints = [];
+      let xAxisLength;
+      let yAxisLength;
+      let lastXDataPoint;
+      let lastYDataPoint;
+      let canvas;      
+      let ctx; 
+      let zeroCoord;
+
+      function logWithText(msg, obj) {
+        console.log(msg);
+        console.log(obj);
+      }
+
+      // Create cumulative data so that we can get basic points to draw
+      function createCumulativeData() {
+        // Sort buyers descendingly based on their prices
+        buyers.sort(function(a, b) { return b.price - a.price; });
+        // Sort sellers ascendingly based on their prices
+        sellers.sort(function(a, b) { return a.price - b.price; });
+        cumuBuyers = buyers;
+        cumuBuyers.forEach(function(entity, index) {
+          if (index > 0)
+            entity.addQty(cumuBuyers[index - 1].qty);
+        });
+        cumuSellers = sellers;
+        cumuSellers.forEach(function(entity, index) {
+          if (index > 0) 
+            entity.addQty(cumuSellers[index - 1].qty);
+        });
+        logWithText("cumulative Sellers: ", cumuSellers);
+        logWithText("cumulative Buyers: ", cumuBuyers);
+      }
+
+      function createDataPoints() {
+        xDataPoints = [0];
+        yDataPoints = [0];
+        cumuBuyers.forEach(function(entity) {
+          xDataPoints.push(entity.qty);
+          yDataPoints.push(entity.price);
+        });
+        cumuSellers.forEach(function(entity) {
+          xDataPoints.push(entity.price);
+        });
+        // remove duplicates
+        xDataPoints = [...new Set(xDataPoints)];
+        yDataPoints = [...new Set(yDataPoints)];
+        // sort the points
+        xDataPoints.sort();
+        yDataPoints.sort();
+        logWithText("x data points:", xDataPoints);
+        logWithText("y data points:", yDataPoints);
+      }
+
+      function drawPointOnCanvas(centrePt, radius, color = "black") {
+        drawPoint(centrePt.getGlobalPt(), radius, color);
+      }
+      
+      function drawPoint(centrePt, radius, color) {
+        ctx.beginPath();
+        ctx.arc(centrePt.x, centrePt.y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      function drawLineOnCanvas(startPt, endPt, 
+        color = "black" /*optional color parameter, default = black*/) 
+      {
+        drawLine(startPt.getGlobalPt(), endPt.getGlobalPt(), color);
+      }
+      
+      function drawLine(startPt, endPt, color) {
+        ctx.beginPath();
+        ctx.moveTo(startPt.x, startPt.y);
+        ctx.lineTo(endPt.x, endPt.y);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+      }
+
+      function drawAxes() {
+        x_axis_end_pt = new Point(
+          ctx.canvas.width - zeroCoord.x, 
+          zeroCoord.y
+        );
+        y_axis_end_pt = new Point(
+          zeroCoord.x, 
+          ctx.canvas.height - zeroCoord.y
+        );
+        drawLineOnCanvas(zeroCoord, x_axis_end_pt);
+        drawLineOnCanvas(zeroCoord, y_axis_end_pt);
+      }
+
+      function drawXYCoords() {
+        if (xDataPoints.length == 0) { return; }
+        if (yDataPoints.length == 0) { return; }
+        lastXDataPoint = xDataPoints.slice(-1); 
+        lastYDataPoint = yDataPoints.slice(-1); 
+        let newPoint;
+        xDataPoints.forEach(function(x) {
+          newPoint = new Point(x, 0).getCartesianPt();
+          drawPointOnCanvas(newPoint, 5);
+        });
+        yDataPoints.forEach(function(y) {
+          newPoint = new Point(0, y).getCartesianPt();
+          drawPointOnCanvas(newPoint, 5);
+        })
+      }
+
+      function drawBuyerPoints() {
+        let newPoint;
+        cumuBuyers.forEach(function(entity) {
+          newPoint = new Point(entity.qty, entity.price).getCartesianPt();
+          drawPointOnCanvas(newPoint, 5, "red");
+        })
+      }
+      function drawSellerPoints() {
+        let newPoint;
+        cumuSellers.forEach(function(entity) {
+          newPoint = new Point(entity.qty, entity.price).getCartesianPt();
+          drawPointOnCanvas(newPoint, 5, "blue");
+        })
+      }
+
+      function draw() {
+        drawAxes(); // on Canvas
+        drawXYCoords(); // on Canvas
+        drawBuyerPoints();
+        drawSellerPoints();
+      }
+
+      function fillZeroCoord() {
+        y_axis = ctx.canvas.height / 100 * 10;
+        x_axis = ctx.canvas.width / 100 * 10;
+        min_axis = (x_axis < y_axis) ? x_axis : y_axis;
+        zeroCoord = new Point(min_axis, min_axis);
+        xAxisLength = ctx.canvas.width - (2 * min_axis) - (min_axis / 2);
+        yAxisLength = ctx.canvas.height - (2 * min_axis) - (min_axis / 2);
+      }
+
+      function resizeCanvas() {
+        ctx.canvas.width  = window.innerWidth;
+        ctx.canvas.height = window.innerHeight;
+        fillZeroCoord();
+      }
+
+      function init() {
+        canvas = document.getElementById("c");
+        ctx = canvas.getContext("2d");
+        window.addEventListener('resize', resizeCanvas, false);
+        resizeCanvas(); // for first time
+      }
+
+      init();
+      createCumulativeData();
+      createDataPoints();
+      draw();
+    </script>
+  </body>
+</html>
